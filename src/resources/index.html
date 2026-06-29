@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Grafo Interactivo - Dijkstra (Neo Minimalist)</title>
+    <title>ALGORITMO DE DIJKSTRA</title>
     <style>
         /* Novedad: Paleta de colores Dark Mode y tipografía estilizada */
         body {
@@ -33,9 +33,9 @@
             font-size: 13px;
             font-weight: 600;
             cursor: pointer;
-            border: 1px solid #00f2fe;
+            border: 1px solid #ffffff;
             background: transparent;
-            color: #00f2fe;
+            color: #ffffff;
             border-radius: 6px;
             transition: all 0.3s ease;
         }
@@ -70,7 +70,7 @@
             height: 120px;
             margin: 20px auto;
             background: #141820;
-            color: #00f2fe;
+            color: #ffffff;
             border: 1px solid #232d3f;
             padding: 12px;
             font-family: 'Fira Code', monospace;
@@ -83,7 +83,7 @@
 </head>
 <body>
 
-<h1>GRAFO INTERACTIVO</h1>
+<h1>ALGORITMO DE DIJKTRA</h1>
 
 <div id="controles">
     <button onclick="cambiarModo('nodo')">Nodo (+)</button>
@@ -232,7 +232,7 @@
         }
 
         if (distancias[destino] === Infinity) {
-            log(`❌ No existe una ruta posible entre Nodo ${origen} y Nodo ${destino}.`);
+            log(`No existe una ruta posible entre Nodo ${origen} y Nodo ${destino}.`);
             rutaResaltada = [];
             dibujar();
             return;
@@ -250,9 +250,9 @@
             rutaResaltada.push({ de: camino[i], a: camino[i+1] });
         }
 
-        log(`🎉 ¡Ruta encontrada!`);
-        log(`➡ Camino: ${camino.join(" ➔ ")}`);
-        log(`📏 Distancia Total: ${distancias[destino]}`);
+        log(` ¡Ruta encontrada!`);
+        log(` Camino: ${camino.join(" ➔ ")}`);
+        log(` Distancia Total: ${distancias[destino]}`);
 
         dibujar();
     }
