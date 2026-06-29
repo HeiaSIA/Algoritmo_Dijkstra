@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Grafo Interactivo - Dijkstra</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f0f2f5; margin: 0; padding: 20px; }
+        h1 { color: #333; }
+        #controles { margin-bottom: 15px; }
+        button { padding: 10px 15px; margin: 5px; font-size: 14px; cursor: pointer; border: none; background: #007bff; color: white; border-radius: 5px; }
+        button:hover { background: #0056b3; }
+        #btnDijkstra { background: #28a745; }
+        #btnDijkstra:hover { background: #218838; }
+        #canvasGrafo { background: white; border: 2px solid #ccc; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: crosshair; }
+        #consola { width: 600px; height: 100px; margin: 15px auto; background: #222; color: #0f0; padding: 10px; font-family: monospace; text-align: left; overflow-y: auto; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+<h1>Grafo Interactivo (Algoritmo de Dijkstra)</h1>
+
+<div id="controles">
+    <button onclick="cambiarModo('nodo')">🟢 Modo: Crear Nodo</button>
+    <button onclick="cambiarModo('arista')">🔗 Modo: Conectar Aristas</button>
+    <button onclick="eliminarUltimo()">❌ Eliminar Último Nodo</button>
+    <button id="btnDijkstra" onclick="ejecutarDijkstra()">▶ Calcular Dijkstra</button>
+</div>
+
+<canvas id="canvasGrafo" width="600" height="400"></canvas>
+<div id="consola">>>> Haz clic en el lienzo blanco para añadir nodos...</div>
+
+<script>
+    const canvas = document.getElementById('canvasGrafo');
+    const ctx = canvas.getContext('2d');
+    const consola = document.getElementById('consola');
+
+    let nodos = [];
+    let aristas = [];
+    let modo = 'nodo';
+    let nodoSeleccionado = null;
+
+    function log(texto) {
+        consola.innerHTML += "<br>> " + texto;
+        consola.scrollTop = consola.scrollHeight;
+    }
+
+    function cambiarModo(nuevoModo) {
+        modo = nuevoModo;
+        nodoSeleccionado = null;
+        log("Cambiado a modo: " + (modo === 'nodo' ? 'Crear Nodos' : 'Conectar Aristas'));
+        dibujar();
+    }
+
+    canvas.addEventListener('click', function(e) {
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        if (modo === 'nodo') {
+            const nuevoId = nodos.length;
+            nodos.push({ id: nuevoId, x: x, y: y });
+            log("Nodo " + nuevoId + " creado en (" + Math.round(x) + ", " + Math.round(y) + ")");
+        } else if (modo === 'arista') {
+            let nodoClickeado = detectarNodo(x, y);
+            if (nodoClickeado !== null) {
+                if (nodoSeleccionado === null) {
+                    nodoSeleccionado = nodoClickeado;
+                    log("Seleccionado Nodo origen: " + nodoSeleccionado);
+                } else {
+                    if (nodoSeleccionado !== nodoClickeado) {
+                        let peso = prompt("Introduce el peso de la arista:", "5") || "5";
+                        aristas.push({ desde: nodoSeleccionado, hasta: nodoClickeado, peso: parseInt(peso) });
+                        log("Arista conectada: " + nodoSeleccionado + " ➔ " + nodoClickeado + " (Peso: " + peso + ")");
+                    }
+                    nodoSeleccionado = null;
+                }
+            }
+        }
+        dibujar();
+    });
+
+    function detectarNodo(x, y) {
+        for (let i = 0; i < nodos.length; i++) {
+            let dist = Math.sqrt((x - nodos[i].x)**2 + (y - nodos[i].y)**2);
+            if (dist < 20) return nodos[i].id;
+        }
+        return null;
+    }
+
+    function eliminarUltimo() {
+        if (nodos.length > 0) {
+            let borrado = nodos.pop();
+            aristas = aristas.filter(a => a.desde !== borrado.id && a.hasta !== borrado.id);
+            log("Nodo " + borrado.id + " eliminado junto con sus conexiones.");
+            nodoSeleccionado = null;
+            dibujar();
+        }
+    }
+
+    function ejecutarDijkstra() {
+        if (nodos.length === 0) {
+            alert("¡Crea algunos nodos primero!");
+            return;
+        }
+        log("Calculando Dijkstra...");
+    }
+
+    function dibujar() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        aristas.forEach(arista => {
+            let n1 = nodos.find(n => n.id === arista.desde);
+            let n2 = nodos.find(n => n.id === arista.hasta);
+            if (n1 && n2) {
+                ctx.beginPath();
+                ctx.moveTo(n1.x, n1.y);
+                ctx.lineTo(n2.x, n2.y);
+                ctx.strokeStyle = "#555";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.fillStyle = "red";
+                ctx.font = "bold 14px Arial";
+                ctx.fillText(arista.peso, (n1.x + n2.x) / 2, (n1.y + n2.y) / 2 - 5);
+            }
+        });
+
+        nodos.forEach(nodo => {
+            ctx.beginPath();
+            ctx.arc(nodo.x, nodo.y, 18, 0, 2 * Math.PI);
+            ctx.fillStyle = (nodo.id === nodoSeleccionado) ? "#ffc107" : "#007bff";
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = "#333";
+            ctx.stroke();
+
+            ctx.fillStyle = "white";
+            ctx.font = "14px Arial";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(nodo.id, nodo.x, nodo.y);
+        });
+    }
+</script>
+</body>
+</html>
