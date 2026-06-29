@@ -12,7 +12,7 @@
         #btnDijkstra { background: #28a745; }
         #btnDijkstra:hover { background: #218838; }
         #canvasGrafo { background: white; border: 2px solid #ccc; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); cursor: crosshair; }
-        #consola { width: 600px; height: 100px; margin: 15px auto; background: #222; color: #0f0; padding: 10px; font-family: monospace; text-align: left; overflow-y: auto; border-radius: 5px; }
+        #consola { width: 600px; height: 120px; margin: 15px auto; background: #222; color: #0f0; padding: 10px; font-family: monospace; text-align: left; overflow-y: auto; border-radius: 5px; }
     </style>
 </head>
 <body>
@@ -23,7 +23,7 @@
     <button onclick="cambiarModo('nodo')">🟢 Modo: Crear Nodo</button>
     <button onclick="cambiarModo('arista')">🔗 Modo: Conectar Aristas</button>
     <button onclick="eliminarUltimo()">❌ Eliminar Último Nodo</button>
-    <button id="btnDijkstra" onclick="ejecutarDijkstra()">▶ Calcular Dijkstra</button>
+    <button id="btnDijkstra" onclick="ejecutarDijkstra()">▶ Calcular Distancia (Dijkstra)</button>
 </div>
 
 <canvas id="canvasGrafo" width="600" height="400"></canvas>
@@ -38,6 +38,7 @@
     let aristas = [];
     let modo = 'nodo';
     let nodoSeleccionado = null;
+    let rutaResaltada = [];
 
     function log(texto) {
         consola.innerHTML += "<br>> " + texto;
@@ -47,6 +48,7 @@
     function cambiarModo(nuevoModo) {
         modo = nuevoModo;
         nodoSeleccionado = null;
+        rutaResaltada = [];
         log("Cambiado a modo: " + (modo === 'nodo' ? 'Crear Nodos' : 'Conectar Aristas'));
         dibujar();
     }
@@ -60,6 +62,7 @@
             const nuevoId = nodos.length;
             nodos.push({ id: nuevoId, x: x, y: y });
             log("Nodo " + nuevoId + " creado en (" + Math.round(x) + ", " + Math.round(y) + ")");
+            rutaResaltada = [];
         } else if (modo === 'arista') {
             let nodoClickeado = detectarNodo(x, y);
             if (nodoClickeado !== null) {
@@ -68,9 +71,15 @@
                     log("Seleccionado Nodo origen: " + nodoSeleccionado);
                 } else {
                     if (nodoSeleccionado !== nodoClickeado) {
-                        let peso = prompt("Introduce el peso de la arista:", "5") || "5";
-                        aristas.push({ desde: nodoSeleccionado, hasta: nodoClickeado, peso: parseInt(peso) });
-                        log("Arista conectada: " + nodoSeleccionado + " ➔ " + nodoClickeado + " (Peso: " + peso + ")");
+                        let pesoInput = prompt("Introduce el peso de la arista:", "5");
+                        let peso = parseInt(pesoInput);
+                        if (!isNaN(peso) && peso >= 0) {
+                            aristas.push({ desde: nodoSeleccionado, hasta: nodoClickeado, peso: peso });
+                            log("Arista conectada: " + nodoSeleccionado + " ↔ " + nodoClickeado + " (Peso: " + peso + ")");
+                            rutaResaltada = [];
+                        } else if(pesoInput !== null) {
+                            alert("Por favor introduce un peso numérico válido.");
+                        }
                     }
                     nodoSeleccionado = null;
                 }
@@ -93,38 +102,130 @@
             aristas = aristas.filter(a => a.desde !== borrado.id && a.hasta !== borrado.id);
             log("Nodo " + borrado.id + " eliminado junto con sus conexiones.");
             nodoSeleccionado = null;
+            rutaResaltada = [];
             dibujar();
         }
     }
 
+    // --- IMPLEMENTACIÓN DEL ALGORITMO DE DIJKSTRA ---
     function ejecutarDijkstra() {
-        if (nodos.length === 0) {
-            alert("¡Crea algunos nodos primero!");
+        if (nodos.length < 2) {
+            alert("¡Necesitas crear al menos 2 nodos y conectarlos!");
             return;
         }
-        log("Calculando Dijkstra...");
+
+        // 1. Pedir Nodos Origen y Destino
+        let origenInput = prompt("Introduce el ID del nodo de ORIGEN:", "0");
+        if (origenInput === null) return;
+        let origen = parseInt(origenInput);
+
+        let destinoInput = prompt("Introduce el ID del nodo de DESTINO:", (nodos.length - 1).toString());
+        if (destinoInput === null) return;
+        let destino = parseInt(destinoInput);
+
+        if (nodos.find(n => n.id === origen) === undefined || nodos.find(n => n.id === destino) === undefined) {
+            alert("Uno o ambos IDs de nodo no existen.");
+            return;
+        }
+
+        log(`Calculando distancia desde Nodo ${origen} hasta Nodo ${destino}...`);
+
+        // 2. Inicializar tablas de Dijkstra
+        let distancias = {};
+        let previos = {};
+        let noVisitados = [];
+
+        nodos.forEach(nodo => {
+            distancias[nodo.id] = Infinity;
+            previos[nodo.id] = null;
+            noVisitados.push(nodo.id);
+        });
+        distancias[origen] = 0;
+
+        // 3. Algoritmo principal
+        while (noVisitados.length > 0) {
+            noVisitados.sort((a, b) => distancias[a] - distancias[b]);
+            let actual = noVisitados.shift();
+
+            if (actual === destino || distancias[actual] === Infinity) {
+                break;
+            }
+
+            let vecinos = [];
+            aristas.forEach(arista => {
+                if (arista.desde === actual && noVisitados.includes(arista.hasta)) {
+                    vecinos.push({ id: arista.hasta, peso: arista.peso });
+                } else if (arista.hasta === actual && noVisitados.includes(arista.desde)) {
+                    vecinos.push({ id: arista.desde, peso: arista.peso });
+                }
+            });
+
+            for (let v of vecinos) {
+                let caminoAlternativo = distancias[actual] + v.peso;
+                if (caminoAlternativo < distancias[v.id]) {
+                    distancias[v.id] = caminoAlternativo;
+                    previos[v.id] = actual;
+                }
+            }
+        }
+
+        // 4. Reconstrucción y marcado de la ruta
+        if (distancias[destino] === Infinity) {
+            log(`❌ No existe una ruta posible entre Nodo ${origen} y Nodo ${destino}.`);
+            rutaResaltada = [];
+            dibujar();
+            return;
+        }
+
+        let camino = [];
+        let u = destino;
+        while (u !== null) {
+            camino.unshift(u);
+            u = previos[u];
+        }
+
+        rutaResaltada = [];
+        for (let i = 0; i < camino.length - 1; i++) {
+            rutaResaltada.push({ de: camino[i], a: camino[i+1] });
+        }
+
+        log(`🎉 ¡Ruta encontrada!`);
+        log(`➡ Camino: ${camino.join(" ➔ ")}`);
+        log(`📏 Distancia Total: ${distancias[destino]}`);
+
+        dibujar();
     }
 
+    // --- FUNCIÓN DE DIBUJO ---
     function dibujar() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+        // Aristas
         aristas.forEach(arista => {
             let n1 = nodos.find(n => n.id === arista.desde);
             let n2 = nodos.find(n => n.id === arista.hasta);
             if (n1 && n2) {
+                let esParteDeRuta = rutaResaltada.some(r =>
+                    (r.de === arista.desde && r.a === arista.hasta) ||
+                    (r.de === arista.hasta && r.a === arista.desde)
+                );
+
                 ctx.beginPath();
                 ctx.moveTo(n1.x, n1.y);
                 ctx.lineTo(n2.x, n2.y);
-                ctx.strokeStyle = "#555";
-                ctx.lineWidth = 2;
+
+                ctx.strokeStyle = esParteDeRuta ? "#28a745" : "#ccc";
+                ctx.lineWidth = esParteDeRuta ? 5 : 2;
                 ctx.stroke();
 
-                ctx.fillStyle = "red";
+                ctx.fillStyle = esParteDeRuta ? "#1e7e34" : "#ff4d4d";
                 ctx.font = "bold 14px Arial";
+                ctx.textAlign = "center";
                 ctx.fillText(arista.peso, (n1.x + n2.x) / 2, (n1.y + n2.y) / 2 - 5);
             }
         });
 
+        // Nodos
         nodos.forEach(nodo => {
             ctx.beginPath();
             ctx.arc(nodo.x, nodo.y, 18, 0, 2 * Math.PI);
@@ -135,7 +236,7 @@
             ctx.stroke();
 
             ctx.fillStyle = "white";
-            ctx.font = "14px Arial";
+            ctx.font = "bold 13px Arial";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(nodo.id, nodo.x, nodo.y);

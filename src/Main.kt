@@ -34,6 +34,6 @@ fun main() {
     servidor.executor = null
     servidor.start()
 
-    println("🌍 ¡Servidor web estructurado iniciado con éxito!")
+    println("🌍 ¡Servidor web para Dijkstra iniciado con éxito!")
     println("👉 Abre tu navegador e ingresa a: http://localhost:8080")
 }
