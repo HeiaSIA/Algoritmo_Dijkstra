@@ -4,17 +4,14 @@
     <meta charset="UTF-8">
     <title>ALGORITMO DE DIJKSTRA</title>
     <style>
-        /* Novedad: Paleta de colores Dark Mode y tipografía estilizada */
         body {
             font-family: 'Segoe UI', -apple-system, Roboto, sans-serif;
             text-align: center;
-            background: #0d0f12; /* Fondo oscuro profundo */
+            background: #0d0f12;
             color: #e2e8f0;
             margin: 0;
             padding: 20px;
         }
-
-        /* Novedad: Título con un sutil efecto de brillo degradado */
         h1 {
             font-weight: 300;
             letter-spacing: 2px;
@@ -23,10 +20,7 @@
             -webkit-text-fill-color: transparent;
             margin-bottom: 25px;
         }
-
         #controles { margin-bottom: 25px; }
-
-        /* Novedad: Botones minimalistas, planos, con bordes de color neón y transiciones suaves */
         button {
             padding: 10px 18px;
             margin: 6px;
@@ -39,13 +33,18 @@
             border-radius: 6px;
             transition: all 0.3s ease;
         }
-        /* Efecto hover: se rellena con el color neón */
         button:hover {
             background: rgba(0, 242, 254, 0.1);
             box-shadow: 0 0 15px rgba(0, 242, 254, 0.4);
         }
-
-        /* Botón Dijkstra con tono verde neón distintivo */
+        #btnEditar {
+            border-color: #ffaa00;
+            color: #ffaa00;
+        }
+        #btnEditar:hover {
+            background: rgba(255, 170, 0, 0.1);
+            box-shadow: 0 0 15px rgba(255, 170, 0, 0.4);
+        }
         #btnDijkstra {
             border-color: #39ff14;
             color: #39ff14;
@@ -54,8 +53,6 @@
             background: rgba(57, 255, 20, 0.1);
             box-shadow: 0 0 15px rgba(57, 255, 20, 0.4);
         }
-
-        /* Novedad: Lienzo de dibujo oscuro, minimalista y con sombra sutil */
         #canvasGrafo {
             background: #141820;
             border: 1px solid #232d3f;
@@ -63,8 +60,6 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
             cursor: crosshair;
         }
-
-        /* Novedad: Consola rediseñada integrada con el estilo neón */
         #consola {
             width: 600px;
             height: 120px;
@@ -88,226 +83,154 @@
 <div id="controles">
     <button onclick="cambiarModo('nodo')">Nodo (+)</button>
     <button onclick="cambiarModo('arista')">Arista (↔)</button>
+    <button id="btnEditar" onclick="cambiarModo('editar')">Editar Peso (✎)</button>
     <button onclick="eliminarUltimo()">Eliminar Último</button>
     <button id="btnDijkstra" onclick="ejecutarDijkstra()">Calcular Dijkstra</button>
 </div>
 
 <canvas id="canvasGrafo" width="600" height="400"></canvas>
-<div id="consola">>>> Haz clic en el lienzo para añadir nodos...</div>
+<div id="consola">>>> Conectando con el servidor...</div>
 
 <script>
     const canvas = document.getElementById('canvasGrafo');
     const ctx = canvas.getContext('2d');
     const consola = document.getElementById('consola');
 
-    let nodos = [];
-    let aristas = [];
-    let modo = 'nodo';
-    let nodoSeleccionado = null;
-    let rutaResaltada = [];
+    let estado = { nodos: [], aristas: [], modo: 'nodo', nodoSeleccionado: null, rutaResaltada: [], logs: [] };
 
-    function log(texto) {
-        consola.innerHTML += "<br>> " + texto;
+    async function sincronizarUI(json) {
+        estado = json;
+
+        consola.innerHTML = estado.logs.map(l => "> " + l).join("<br>");
         consola.scrollTop = consola.scrollHeight;
+
+        if (estado.alert) {
+            alert(estado.alert);
+        }
+
+        // Caso 1: Crear arista nueva
+        if (estado.solicitarArista) {
+            let pesoInput = prompt("Introduce el peso de la arista:", "5");
+            let peso = parseInt(pesoInput);
+            if (!isNaN(peso) && peso >= 0) {
+                await enviarAccion(`addArista&desde=${estado.solicitarArista.desde}&hasta=${estado.solicitarArista.hasta}&peso=${peso}`);
+            } else if (pesoInput !== null) {
+                alert("Por favor introduce un peso numérico válido.");
+            }
+        }
+
+        // Caso 2: Editar arista existente
+        if (estado.solicitarEdicionArista) {
+            let pesoInput = prompt(`Introduce el nuevo peso para la arista (Actual: ${estado.solicitarEdicionArista.actual}):`, estado.solicitarEdicionArista.actual);
+            let peso = parseInt(pesoInput);
+            if (!isNaN(peso) && peso >= 0) {
+                await enviarAccion(`actualizarPeso&desde=${estado.solicitarEdicionArista.desde}&hasta=${estado.solicitarEdicionArista.hasta}&peso=${peso}`);
+            } else if (pesoInput !== null) {
+                alert("Por favor introduce un peso numérico válido.");
+            }
+        }
+
+        dibujar();
+    }
+
+    async function enviarAccion(queryString) {
+        const res = await fetch(`/api?action=${queryString}`, { method: 'POST' });
+        const json = await res.json();
+        await sincronizarUI(json);
     }
 
     function cambiarModo(nuevoModo) {
-        modo = nuevoModo;
-        nodoSeleccionado = null;
-        rutaResaltada = [];
-        log("Cambiado a modo: " + (modo === 'nodo' ? 'Crear Nodos' : 'Conectar Aristas'));
-        dibujar();
+        enviarAccion(`cambiarModo&modo=${nuevoModo}`);
+    }
+
+    if (estado.modo === 'editar') {
+        ctx.fillStyle = "rgba(255, 170, 0, 0.2)";
+        ctx.arc(midX, midY, 12, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+
+    function eliminarUltimo() {
+        enviarAccion('eliminar');
+    }
+
+    function ejecutarDijkstra() {
+        if (estado.nodos.length < 2) {
+            alert("¡Necesitas crear al menos 2 nodos y conectarlos!");
+            return;
+        }
+        let origenInput = prompt("Introduce el ID del nodo de ORIGEN:", "0");
+        if (origenInput === null) return;
+        let origen = parseInt(origenInput);
+
+        let destinoInput = prompt("Introduce el ID del nodo de DESTINO:", (estado.nodos.length - 1).toString());
+        if (destinoInput === null) return;
+        let destino = parseInt(destinoInput);
+
+        enviarAccion(`dijkstra&origen=${origen}&destino=${destino}`);
     }
 
     canvas.addEventListener('click', function(e) {
         const rect = canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
-
-        if (modo === 'nodo') {
-            const nuevoId = nodos.length;
-            nodos.push({ id: nuevoId, x: x, y: y });
-            log("Nodo " + nuevoId + " creado en (" + Math.round(x) + ", " + Math.round(y) + ")");
-            rutaResaltada = [];
-        } else if (modo === 'arista') {
-            let nodoClickeado = detectarNodo(x, y);
-            if (nodoClickeado !== null) {
-                if (nodoSeleccionado === null) {
-                    nodoSeleccionado = nodoClickeado;
-                    log("Seleccionado Nodo origen: " + nodoSeleccionado);
-                } else {
-                    if (nodoSeleccionado !== nodoClickeado) {
-                        let pesoInput = prompt("Introduce el peso de la arista:", "5");
-                        let peso = parseInt(pesoInput);
-                        if (!isNaN(peso) && peso >= 0) {
-                            aristas.push({ desde: nodoSeleccionado, hasta: nodoClickeado, peso: peso });
-                            log("Arista conectada: " + nodoSeleccionado + " ↔ " + nodoClickeado + " (Peso: " + peso + ")");
-                            rutaResaltada = [];
-                        } else if(pesoInput !== null) {
-                            alert("Por favor introduce un peso numérico válido.");
-                        }
-                    }
-                    nodoSeleccionado = null;
-                }
-            }
-        }
-        dibujar();
+        enviarAccion(`click&x=${x}&y=${y}`);
     });
 
-    function detectarNodo(x, y) {
-        for (let i = 0; i < nodos.length; i++) {
-            let dist = Math.sqrt((x - nodos[i].x)**2 + (y - nodos[i].y)**2);
-            if (dist < 20) return nodos[i].id;
-        }
-        return null;
-    }
-
-    function eliminarUltimo() {
-        if (nodos.length > 0) {
-            let borrado = nodos.pop();
-            aristas = aristas.filter(a => a.desde !== borrado.id && a.hasta !== borrado.id);
-            log("Nodo " + borrado.id + " eliminado junto con sus conexiones.");
-            nodoSeleccionado = null;
-            rutaResaltada = [];
-            dibujar();
-        }
-    }
-
-    function ejecutarDijkstra() {
-        if (nodos.length < 2) {
-            alert("¡Necesitas crear al menos 2 nodos y conectarlos!");
-            return;
-        }
-
-        let origenInput = prompt("Introduce el ID del nodo de ORIGEN:", "0");
-        if (origenInput === null) return;
-        let origen = parseInt(origenInput);
-
-        let destinoInput = prompt("Introduce el ID del nodo de DESTINO:", (nodos.length - 1).toString());
-        if (destinoInput === null) return;
-        let destino = parseInt(destinoInput);
-
-        if (nodos.find(n => n.id === origen) === undefined || nodos.find(n => n.id === destino) === undefined) {
-            alert("Uno o ambos IDs de nodo no existen.");
-            return;
-        }
-
-        log(`Calculando distancia desde Nodo ${origen} hasta Nodo ${destino}...`);
-
-        let distancias = {};
-        let previos = {};
-        let noVisitados = [];
-
-        nodos.forEach(nodo => {
-            distancias[nodo.id] = Infinity;
-            previos[nodo.id] = null;
-            noVisitados.push(nodo.id);
-        });
-        distancias[origen] = 0;
-
-        while (noVisitados.length > 0) {
-            noVisitados.sort((a, b) => distancias[a] - distancias[b]);
-            let actual = noVisitados.shift();
-
-            if (actual === destino || distancias[actual] === Infinity) {
-                break;
-            }
-
-            let vecinos = [];
-            aristas.forEach(arista => {
-                if (arista.desde === actual && noVisitados.includes(arista.hasta)) {
-                    vecinos.push({ id: arista.hasta, peso: arista.peso });
-                } else if (arista.hasta === actual && noVisitados.includes(arista.desde)) {
-                    vecinos.push({ id: arista.desde, peso: arista.peso });
-                }
-            });
-
-            for (let v of vecinos) {
-                let caminoAlternativo = distancias[actual] + v.peso;
-                if (caminoAlternativo < distancias[v.id]) {
-                    distancias[v.id] = caminoAlternativo;
-                    previos[v.id] = actual;
-                }
-            }
-        }
-
-        if (distancias[destino] === Infinity) {
-            log(`No existe una ruta posible entre Nodo ${origen} y Nodo ${destino}.`);
-            rutaResaltada = [];
-            dibujar();
-            return;
-        }
-
-        let camino = [];
-        let u = destino;
-        while (u !== null) {
-            camino.unshift(u);
-            u = previos[u];
-        }
-
-        rutaResaltada = [];
-        for (let i = 0; i < camino.length - 1; i++) {
-            rutaResaltada.push({ de: camino[i], a: camino[i+1] });
-        }
-
-        log(` ¡Ruta encontrada!`);
-        log(` Camino: ${camino.join(" ➔ ")}`);
-        log(` Distancia Total: ${distancias[destino]}`);
-
-        dibujar();
-    }
-
-    // --- FUNCIÓN DE DIBUJO CON ADAPTACIONES NEÓN ---
     function dibujar() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Dibujar Aristas
-        aristas.forEach(arista => {
-            let n1 = nodos.find(n => n.id === arista.desde);
-            let n2 = nodos.find(n => n.id === arista.hasta);
+        // Aristas
+        estado.aristas.forEach(arista => {
+            let n1 = estado.nodos.find(n => n.id === arista.desde);
+            let n2 = estado.nodos.find(n => n.id === arista.hasta);
             if (n1 && n2) {
-                let esParteDeRuta = rutaResaltada.some(r =>
+                let esParteDeRuta = estado.rutaResaltada.some(r =>
                     (r.de === arista.desde && r.a === arista.hasta) ||
                     (r.de === arista.hasta && r.a === arista.desde)
                 );
+
+                let midX = (n1.x + n2.x) / 2;
+                let midY = (n1.y + n2.y) / 2;
 
                 ctx.beginPath();
                 ctx.moveTo(n1.x, n1.y);
                 ctx.lineTo(n2.x, n2.y);
 
-                // Novedad: Aristas normales gris oscuro elegante, aristas de la ruta en verde neón brillante
                 ctx.strokeStyle = esParteDeRuta ? "#39ff14" : "#2d3748";
                 ctx.lineWidth = esParteDeRuta ? 4 : 1.5;
                 ctx.stroke();
 
-                // Novedad: Texto del peso flotando con un color contrastante (Blanco o Verde Neón)
-                ctx.fillStyle = esParteDeRuta ? "#39ff14" : "#a0aec0";
+                // Si está en modo edición de pesos, dibuja un pequeño indicador circular ámbar detrás del número
+                if (estado.modo === 'editar') {
+                    ctx.beginPath();
+                    ctx.arc(midX, midY - 4, 10, 0, 2 * Math.PI);
+                    ctx.fillStyle = "rgba(255, 170, 0, 0.15)";
+                    ctx.fill();
+                }
+
+                ctx.fillStyle = esParteDeRuta ? "#39ff14" : (estado.modo === 'editar' ? "#ffaa00" : "#a0aec0");
                 ctx.font = esParteDeRuta ? "bold 13px Consolas" : "11px Consolas";
                 ctx.textAlign = "center";
-                ctx.fillText(arista.peso, (n1.x + n2.x) / 2, (n1.y + n2.y) / 2 - 6);
+                ctx.fillText(arista.peso, midX, midY - 1);
             }
         });
 
-        // Dibujar Nodos
-        nodos.forEach(nodo => {
+        // Nodos
+        estado.nodos.forEach(nodo => {
             ctx.beginPath();
             ctx.arc(nodo.x, nodo.y, 16, 0, 2 * Math.PI);
 
-            // Novedad: Color dinámico del nodo según el estado
-            if (nodo.id === nodoSeleccionado) {
-                ctx.fillStyle = "#ff007f"; // Magenta eléctrico al seleccionarlo
+            if (nodo.id === estado.nodoSeleccionado) {
+                ctx.fillStyle = "#ff007f";
             } else {
-                ctx.fillStyle = "#00f2fe"; // Cyan neón por defecto
+                ctx.fillStyle = "#00f2fe";
             }
-
             ctx.fill();
 
-            // Borde oscuro y fino alrededor del nodo para conservar el minimalismo
             ctx.lineWidth = 1;
             ctx.strokeStyle = "#0d0f12";
             ctx.stroke();
 
-            // Novedad: Tipografía interna del nodo estilizada (Número de nodo en negro/oscuro para legibilidad)
             ctx.fillStyle = "#0d0f12";
             ctx.font = "bold 12px Consolas";
             ctx.textAlign = "center";
@@ -315,6 +238,8 @@
             ctx.fillText(nodo.id, nodo.x, nodo.y);
         });
     }
+
+    window.onload = () => enviarAccion('get');
 </script>
 </body>
 </html>
